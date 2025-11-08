@@ -27,6 +27,7 @@ from orchestrator.consistency import (
 )
 from orchestrator.stream_consumer import ensure_topic
 from orchestrator.predictive import TierPredictor, auto_label_records
+from security import security_manager
 
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "redpanda:9092")
 TOPIC_ACCESS = os.getenv("TOPIC_ACCESS", "access-events")
@@ -83,6 +84,7 @@ class AccessEvent(BaseModel):
 class MoveRequest(BaseModel):
     file_id: str
     target: str  # "s3" | "azure" | "gcs"
+    principal_roles: Optional[List[str]] = None
 
 
 class TrainingRecord(BaseModel):
@@ -557,6 +559,8 @@ def seed_from_disk():
         for key, default in FEATURE_DEFAULTS.items():
             base_doc.setdefault(key, default)
         base_doc.setdefault("version", 1)
+        location = str(base_doc.get("current_location", "s3"))
+        base_doc["security_policy"] = security_manager.describe_policy(location)
         base_doc.setdefault(
             "sync_state",
             {
@@ -1147,7 +1151,7 @@ def policy(file_id: str):
         tier = decide_tier(f.get("access_freq_per_day",0), f.get("latency_sla_ms",9999))
         source = "rule"
         confidence = None
-    return {
+    response = {
         "file_id": file_id,
         "recommendation": tier,
         "source": source,
@@ -1155,6 +1159,10 @@ def policy(file_id: str):
         "confidence": confidence,
         "model_type": getattr(predictor, "model_type", "unknown"),
     }
+    policy_doc = f.get("security_policy")
+    if isinstance(policy_doc, dict):
+        response["security_policy"] = policy_doc
+    return response
 
 
 @app.get("/streaming/metrics")
@@ -1198,6 +1206,20 @@ def ingest_event(ev: AccessEvent):
             set_updates["storage_cost_per_gb"] = float(ev.storage_cost_per_gb)
         if ev.cloud_region:
             set_updates["cloud_region"] = ev.cloud_region
+        existing_doc: Optional[Dict[str, Any]] = None
+        if consistency_mgr is None:
+            existing_doc = coll_files.find_one(
+                {"id": ev.file_id},
+                {"_id": 0, "current_location": 1, "security_policy": 1},
+            )
+            if existing_doc is None:
+                set_updates["security_policy"] = security_manager.describe_policy("s3")
+            else:
+                current_location = existing_doc.get("current_location") or "s3"
+                policy = existing_doc.get("security_policy")
+                policy_location = policy.get("location") if isinstance(policy, dict) else None
+                if policy_location != current_location:
+                    set_updates["security_policy"] = security_manager.describe_policy(current_location)
         if consistency_mgr is not None:
             try:
                 consistency_mgr.record_failure(ev.file_id, "kafka_unavailable", "producer not ready")
@@ -1210,6 +1232,8 @@ def ingest_event(ev: AccessEvent):
                 payload["storage_cost_per_gb"] = FEATURE_DEFAULTS["storage_cost_per_gb"]
             if not doc.get("cloud_region") and "cloud_region" not in payload:
                 payload["cloud_region"] = FEATURE_DEFAULTS["cloud_region"]
+            current_location = doc.get("current_location") or "s3"
+            payload.setdefault("security_policy", security_manager.describe_policy(current_location))
             inc_payload = {"access_freq_per_day": 1}
             if size_increment_kb > 0.0:
                 inc_payload["size_kb"] = size_increment_kb
@@ -1230,6 +1254,7 @@ def ingest_event(ev: AccessEvent):
                         "cloud_region": FEATURE_DEFAULTS["cloud_region"],
                         "current_tier": FEATURE_DEFAULTS["current_tier"],
                         "current_location": "s3",
+                        "security_policy": security_manager.describe_policy("s3"),
                     },
                 },
                 upsert=True,
@@ -1238,6 +1263,18 @@ def ingest_event(ev: AccessEvent):
             try:
                 consistency_mgr.safe_update(ev.file_id, _mutate, reason="access_event")
             except Exception:
+                fallback_doc = coll_files.find_one(
+                    {"id": ev.file_id},
+                    {"_id": 0, "current_location": 1, "security_policy": 1},
+                )
+                if fallback_doc is None:
+                    set_updates.setdefault("security_policy", security_manager.describe_policy("s3"))
+                else:
+                    curr_location = fallback_doc.get("current_location") or "s3"
+                    policy = fallback_doc.get("security_policy")
+                    policy_location = policy.get("location") if isinstance(policy, dict) else None
+                    if policy_location != curr_location:
+                        set_updates["security_policy"] = security_manager.describe_policy(curr_location)
                 coll_files.update_one(
                     {"id": ev.file_id},
                     {
@@ -1252,6 +1289,7 @@ def ingest_event(ev: AccessEvent):
                             "cloud_region": FEATURE_DEFAULTS["cloud_region"],
                             "current_tier": FEATURE_DEFAULTS["current_tier"],
                             "current_location": "s3",
+                            "security_policy": security_manager.describe_policy("s3"),
                         },
                     },
                     upsert=True,
@@ -1286,12 +1324,26 @@ def ingest_event(ev: AccessEvent):
             payload["storage_cost_per_gb"] = FEATURE_DEFAULTS["storage_cost_per_gb"]
         if not doc.get("cloud_region") and "cloud_region" not in payload:
             payload["cloud_region"] = FEATURE_DEFAULTS["cloud_region"]
+        current_location = doc.get("current_location") or "s3"
+        payload.setdefault("security_policy", security_manager.describe_policy(current_location))
         inc_payload = {"access_freq_per_day": 1}
         if size_increment_kb > 0.0:
             inc_payload["size_kb"] = size_increment_kb
         return {"set": payload, "inc": inc_payload}
 
     if consistency_mgr is None:
+        snapshot = coll_files.find_one(
+            {"id": ev.file_id},
+            {"_id": 0, "current_location": 1, "security_policy": 1},
+        )
+        if snapshot is None:
+            set_updates.setdefault("security_policy", security_manager.describe_policy("s3"))
+        else:
+            location = snapshot.get("current_location") or "s3"
+            policy = snapshot.get("security_policy")
+            policy_location = policy.get("location") if isinstance(policy, dict) else None
+            if policy_location != location:
+                set_updates["security_policy"] = security_manager.describe_policy(location)
         coll_files.update_one(
             {"id": ev.file_id},
             {
@@ -1306,6 +1358,7 @@ def ingest_event(ev: AccessEvent):
                     "cloud_region": FEATURE_DEFAULTS["cloud_region"],
                     "current_tier": FEATURE_DEFAULTS["current_tier"],
                     "current_location": "s3",
+                    "security_policy": security_manager.describe_policy("s3"),
                 },
             },
             upsert=True,
@@ -1314,24 +1367,37 @@ def ingest_event(ev: AccessEvent):
         try:
             consistency_mgr.safe_update(ev.file_id, _mutate_success, reason="access_event")
         except Exception:
-                coll_files.update_one(
-                    {"id": ev.file_id},
-                    {
-                        "$inc": {
+            snapshot = coll_files.find_one(
+                {"id": ev.file_id},
+                {"_id": 0, "current_location": 1, "security_policy": 1},
+            )
+            if snapshot is None:
+                set_updates.setdefault("security_policy", security_manager.describe_policy("s3"))
+            else:
+                location = snapshot.get("current_location") or "s3"
+                policy = snapshot.get("security_policy")
+                policy_location = policy.get("location") if isinstance(policy, dict) else None
+                if policy_location != location:
+                    set_updates["security_policy"] = security_manager.describe_policy(location)
+            coll_files.update_one(
+                {"id": ev.file_id},
+                {
+                    "$inc": {
                             **({"size_kb": size_increment_kb} if size_increment_kb > 0.0 else {}),
                             "access_freq_per_day": 1,
                         },
-                        "$set": set_updates,
-                        "$setOnInsert": {
-                            "size_kb": max(size_increment_kb, FEATURE_DEFAULTS["size_kb"]),
-                            "storage_cost_per_gb": FEATURE_DEFAULTS["storage_cost_per_gb"],
-                            "cloud_region": FEATURE_DEFAULTS["cloud_region"],
-                            "current_tier": FEATURE_DEFAULTS["current_tier"],
-                            "current_location": "s3",
-                        },
+                "$set": set_updates,
+                "$setOnInsert": {
+                    "size_kb": max(size_increment_kb, FEATURE_DEFAULTS["size_kb"]),
+                    "storage_cost_per_gb": FEATURE_DEFAULTS["storage_cost_per_gb"],
+                    "cloud_region": FEATURE_DEFAULTS["cloud_region"],
+                    "current_tier": FEATURE_DEFAULTS["current_tier"],
+                    "current_location": "s3",
+                    "security_policy": security_manager.describe_policy("s3"),
                 },
-                upsert=True,
-            )
+            },
+            upsert=True,
+        )
     _update_usage_metrics(ev.file_id)
     return {"queued": True}
 
@@ -1346,9 +1412,13 @@ def move(req: MoveRequest = Body(...)):
         raise HTTPException(404, "file not found")
 
     src = f.get("current_location", "s3")
+    principal_roles = req.principal_roles or ["system"]
     try:
-        with_retry(lambda: move_object(req.file_id, src, req.target))
-        set_fields: Dict[str, Any] = {"current_location": req.target}
+        with_retry(lambda: move_object(req.file_id, src, req.target, principal_roles))
+        set_fields: Dict[str, Any] = {
+            "current_location": req.target,
+            "security_policy": security_manager.describe_policy(req.target),
+        }
         tier_from_location = LOCATION_TO_TIER.get(req.target.lower())
         if tier_from_location:
             set_fields["current_tier"] = tier_from_location
@@ -1373,6 +1443,7 @@ def move(req: MoveRequest = Body(...)):
                 "target": req.target,
                 "tier": set_fields.get("current_tier"),
                 "ts": time.time(),
+                "principal_roles": list(principal_roles) if principal_roles else None,
             }
         )
         _update_usage_metrics(req.file_id)
@@ -1490,9 +1561,11 @@ def storage_test():
         from orchestrator.mover import S3_BUCKET
         s3 = S3Client()
         key = "diag_s3.txt"
-        s3.put_object(S3_BUCKET, key, payload)
+        cipher = security_manager.encrypt("s3", payload, {"system"})
+        s3.put_object(S3_BUCKET, key, cipher)
         rb = s3.get_object(S3_BUCKET, key)
-        results["s3"] = {"ok": rb == payload, "sha": _sha(rb or b""), "bucket": S3_BUCKET}
+        plain = security_manager.decrypt("s3", rb, {"system"}) if rb is not None else None
+        results["s3"] = {"ok": plain == payload, "sha": _sha(plain or b""), "bucket": S3_BUCKET}
         s3.delete_object(S3_BUCKET, key)
     except Exception as e:
         results["s3"] = {"ok": False, "error": str(e)}
@@ -1504,9 +1577,11 @@ def storage_test():
         cont = "netapp-blob"
         key = "diag_az.txt"
         az.ensure_container(cont)
-        az.put_blob(cont, key, payload)
+        cipher = security_manager.encrypt("azure", payload, {"system"})
+        az.put_blob(cont, key, cipher)
         rb = az.get_blob(cont, key)
-        results["azure"] = {"ok": rb == payload, "sha": _sha(rb or b""), "container": cont}
+        plain = security_manager.decrypt("azure", rb, {"system"}) if rb is not None else None
+        results["azure"] = {"ok": plain == payload, "sha": _sha(plain or b""), "container": cont}
         az.delete_blob(cont, key)
     except Exception as e:
         results["azure"] = {"ok": False, "error": str(e)}
@@ -1518,9 +1593,11 @@ def storage_test():
         gcs = GCSClient()
         key = "diag_gcs.txt"
         gcs.ensure_bucket(GCS_BUCKET)
-        gcs.put_object(GCS_BUCKET, key, payload)
+        cipher = security_manager.encrypt("gcs", payload, {"system"})
+        gcs.put_object(GCS_BUCKET, key, cipher)
         rb = gcs.get_object(GCS_BUCKET, key)
-        results["gcs"] = {"ok": rb == payload, "sha": _sha(rb or b""), "bucket": GCS_BUCKET}
+        plain = security_manager.decrypt("gcs", rb, {"system"}) if rb is not None else None
+        results["gcs"] = {"ok": plain == payload, "sha": _sha(plain or b""), "bucket": GCS_BUCKET}
         gcs.delete_object(GCS_BUCKET, key)
     except Exception as e:
         results["gcs"] = {"ok": False, "error": str(e)}
