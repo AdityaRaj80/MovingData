@@ -30,7 +30,7 @@ This project provides a prototype that automates data tiering, replicates files 
 ## How to Run (Local)
 ```bash
 git clone https://github.com/AdityaRaj80/MovingData.git
-cd MovingData/infra
+cd MovingData\hackathon-main\NetApp-main\infra
 docker compose up -d --build
 ```
 Access:
