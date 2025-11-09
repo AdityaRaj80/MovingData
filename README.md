@@ -35,7 +35,7 @@ docker compose up -d --build
 ```
 Access:
 - FastAPI → http://localhost:8001/docs  
-- Streamlit → http://localhost:8601  
+- Streamlit → http://localhost:8501  
 
 ## Verification
 ```bash
