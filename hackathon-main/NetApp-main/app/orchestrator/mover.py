@@ -1,8 +1,11 @@
 import os
 from pathlib import Path
+from typing import Iterable, Optional
+
 from storage_clients.s3_client import S3Client
 from storage_clients.azure_client import AzureClient
 from storage_clients.gcs_client import GCSClient
+from security import security_manager
 
 S3_BUCKET = os.getenv("S3_BUCKET","netapp-bucket")
 GCS_BUCKET = os.getenv("GCS_BUCKET","netapp-gcs")
@@ -34,9 +37,15 @@ def put_seed_objects(seed_dir: str):
     for fp in p.glob("*.txt"):
         key = fp.name
         body = fp.read_bytes()
-        s3.put_object(S3_BUCKET, key, body)
+        encrypted = security_manager.encrypt("s3", body, {"system"})
+        s3.put_object(S3_BUCKET, key, encrypted)
 
-def move_object(obj_key: str, src: str, dst: str):
+def move_object(
+    obj_key: str,
+    src: str,
+    dst: str,
+    principal_roles: Optional[Iterable[str]] = None,
+):
     """
     Copy between emulated clouds; delete source after copy (simulate move).
     Locations: "s3", "azure", "gcs"
@@ -54,12 +63,16 @@ def move_object(obj_key: str, src: str, dst: str):
     if data is None:
         raise FileNotFoundError(f"{obj_key} not found in {src}")
 
+    roles = principal_roles if principal_roles is not None else {"system"}
+    plaintext = security_manager.decrypt(src, data, roles)
+    encrypted = security_manager.encrypt(dst, plaintext, roles)
+
     if dst == "s3":
-        s3.put_object(S3_BUCKET, obj_key, data)
+        s3.put_object(S3_BUCKET, obj_key, encrypted)
     elif dst == "azure":
-        az.put_blob("netapp-blob", obj_key, data)
+        az.put_blob("netapp-blob", obj_key, encrypted)
     elif dst == "gcs":
-        gcs.put_object(GCS_BUCKET, obj_key, data)
+        gcs.put_object(GCS_BUCKET, obj_key, encrypted)
     else:
         raise ValueError("unknown dst")
 

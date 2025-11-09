@@ -95,3 +95,28 @@ To showcase the predictive tiering loop end-to-end the API now includes a synthe
 
 Together these additions satisfy the request to simulate large data transfers, verify ML-driven tiering under heavy load, and keep Kafka telemetry visibly flowing throughout the hackathon demo.
 
+## Hosting the Application on Google Cloud Storage
+
+The repository now ships with a lightweight deployment helper that bundles the
+source tree into a versioned tarball and uploads it to a Google Cloud Storage
+bucket. This enables repeatable hosting of the code artifacts without altering
+any encrypted payloads or policy metadata.
+
+1. Export your Google Cloud credentials and project metadata:
+
+   ```bash
+   export GOOGLE_APPLICATION_CREDENTIALS=/app/service-account.json
+   export GCP_PROJECT_ID=netapphackathon
+   ```
+
+2. Run the deployer, providing the bucket that should receive the artifact and
+   (optionally) a folder prefix to group releases:
+
+   ```bash
+   python -m app.deploy.gcs_deployer your-bucket-name --prefix deployments
+   ```
+
+The command emits the `gs://` URI of the uploaded archive once the transfer
+completes. If you prefer to override the credentials path or project on the
+CLI, pass `--credentials` and `--project` arguments respectively.
+
