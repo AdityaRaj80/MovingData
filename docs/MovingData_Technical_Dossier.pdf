@@ -1,0 +1,1190 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R 7 0 R 9 0 R 11 0 R 13 0 R 15 0 R 17 0 R 19 0 R 21 0 R 23 0 R 25 0 R] /Count 11 /MediaBox [0 0 612 792] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 2393 >>
+stream
+BT
+/F1 10 Tf
+12 TL
+1 0 0 1 72 720 Tm
+(MOVINGDATA: TECHNICAL ARCHITECTURE DOSSIER) Tj
+T*
+() Tj
+T*
+() Tj
+T*
+(**Project**: Intelligent Multi-Cloud Data Pipeline \(NetApp "Data in Motion" Hackathon) Tj
+T*
+(Submission\)) Tj
+T*
+(**Authors**: MovingData Team) Tj
+T*
+(**Repository**: `MovingData`) Tj
+T*
+(**Document Version**: 1.0) Tj
+T*
+(**Last Updated**: 2025-11-09) Tj
+T*
+() Tj
+T*
+(---) Tj
+T*
+() Tj
+T*
+(TABLE OF CONTENTS) Tj
+T*
+() Tj
+T*
+(1. [Executive Summary]\(#executive-summary\)) Tj
+T*
+(2. [System Goals & Non-Functional Requirements]\(#system-goals--non-functional-) Tj
+T*
+(requirements\)) Tj
+T*
+(3. [End-to-End Architecture]\(#end-to-end-architecture\)) Tj
+T*
+(1. [High-Level Data Flow]\(#high-level-data-flow\)) Tj
+T*
+(2. [Component Inventory]\(#component-inventory\)) Tj
+T*
+(4. [Control Plane API \(FastAPI\)]\(#control-plane-api-fastapi\)) Tj
+T*
+(1. [Startup Lifecycle]\(#startup-lifecycle\)) Tj
+T*
+(2. [REST Endpoints]\(#rest-endpoints\)) Tj
+T*
+(3. [MongoDB Schemas & Collections]\(#mongodb-schemas--collections\)) Tj
+T*
+(4. [Kafka Telemetry Pipeline]\(#kafka-telemetry-pipeline\)) Tj
+T*
+(5. [Orchestration Services]\(#orchestration-services\)) Tj
+T*
+(1. [Mover]\(#mover\)) Tj
+T*
+(2. [Predictive Tiering]\(#predictive-tiering\)) Tj
+T*
+(3. [Rules Engine]\(#rules-engine\)) Tj
+T*
+(4. [Consistency Verification]\(#consistency-verification\)) Tj
+T*
+(5. [Streaming Consumers]\(#streaming-consumers\)) Tj
+T*
+(6. [Security & Compliance]\(#security--compliance\)) Tj
+T*
+(1. [Encryption Domains]\(#encryption-domains\)) Tj
+T*
+(2. [Role-Based Access Control]\(#role-based-access-control\)) Tj
+T*
+(3. [Key Management & Rotation]\(#key-management--rotation\)) Tj
+T*
+(4. [Auditability]\(#auditability\)) Tj
+T*
+(7. [Storage Client Abstractions]\(#storage-client-abstractions\)) Tj
+T*
+(8. [Observability & Alerting]\(#observability--alerting\)) Tj
+T*
+(9. [Streamlit Mission Control]\(#streamlit-mission-control\)) Tj
+T*
+(10. [Infrastructure as Code]\(#infrastructure-as-code\)) Tj
+T*
+(1. [Local Compose Topology]\(#local-compose-topology\)) Tj
+T*
+(2. [Environment Configuration]\(#environment-configuration\)) Tj
+T*
+(3. [Extending to Cloud Providers]\(#extending-to-cloud-providers\)) Tj
+T*
+(11. [Runbooks & Operational Playbooks]\(#runbooks--operational-playbooks\)) Tj
+T*
+(12. [Testing Strategy]\(#testing-strategy\)) Tj
+T*
+(13. [Roadmap & Future Enhancements]\(#roadmap--future-enhancements\)) Tj
+ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 2937 >>
+stream
+BT
+/F1 10 Tf
+12 TL
+1 0 0 1 72 720 Tm
+(14. [Appendix]\(#appendix\)) Tj
+T*
+(1. [Reference Environment Variables]\(#reference-environment-variables\)) Tj
+T*
+(2. [Sample API Sequences]\(#sample-api-sequences\)) Tj
+T*
+() Tj
+T*
+(---) Tj
+T*
+() Tj
+T*
+(EXECUTIVE SUMMARY) Tj
+T*
+() Tj
+T*
+(MovingData demonstrates an enterprise-grade control plane that keeps sensitive data) Tj
+T*
+(encrypted end-to-end while orchestrating replication across heterogeneous object stores.) Tj
+T*
+(The platform blends deterministic policies with machine-learning predictions to migrate) Tj
+T*
+(content between emulated AWS S3 \(MinIO\), Azure Blob Storage \(Azurite\), and Google Cloud) Tj
+T*
+(Storage \(FakeGCS\). The mission control dashboard provides an operational cockpit for) Tj
+T*
+(analysts to validate integrity, latency, and cost signals in real time.) Tj
+T*
+() Tj
+T*
+(Key capabilities showcased in the hackathon submission include:) Tj
+T*
+() Tj
+T*
+(- **Secure-by-default transfers** - Every payload is encrypted via location-specific) Tj
+T*
+(Fernet keys before leaving the API process. MinIO additionally applies SSE-KMS using a) Tj
+T*
+(static key alias \(`netapp-key`\).) Tj
+T*
+(- **Cross-cloud parity** - Replicas are created and verified across MinIO, Azurite, and) Tj
+T*
+(FakeGCS through unified storage client abstractions. Checksums, retries, and conflict) Tj
+T*
+(detection guarantee deterministic outcomes.) Tj
+T*
+(- **Event-driven decisioning** - Access patterns, stream anomalies, and operational) Tj
+T*
+(metrics flow into Redpanda \(Kafka API\). These signals feed the predictive tiering engine) Tj
+T*
+(and drive alerting thresholds.) Tj
+T*
+(- **Observability-first design** - FastAPI exposes health, file inventory, policy) Tj
+T*
+(metadata, and consistency status endpoints. Streamlit visualizations surface telemetry for) Tj
+T*
+(demo audiences without requiring direct CLI access.) Tj
+T*
+() Tj
+T*
+(SYSTEM GOALS & NON-FUNCTIONAL REQUIREMENTS) Tj
+T*
+() Tj
+T*
+(The hackathon brief emphasized a multi-cloud, data-in-motion workload with strict security) Tj
+T*
+(assurances. MovingData addresses the following goals:) Tj
+T*
+() Tj
+T*
+(- **Confidentiality** - Encrypt in-flight data with distinct Fernet keys per provider and) Tj
+T*
+(enforce RBAC gates prior to decryption.) Tj
+T*
+(- **Integrity & Consistency** - Maintain consistent object replicas despite heterogeneous) Tj
+T*
+(APIs; detect and heal drifts automatically.) Tj
+T*
+(- **Availability** - Provide resilient background simulations and manual overrides through) Tj
+T*
+(RESTful operations; degrade gracefully when optional services \(e.g., stream sandbox\) are) Tj
+T*
+(offline.) Tj
+T*
+(- **Auditability** - Persist metadata describing encryption policies, access events, and) Tj
+T*
+(synchronization attempts in MongoDB for evidence generation.) Tj
+T*
+(- **Extensibility** - Modular orchestrator and storage clients simplify replacement of) Tj
+T*
+(emulators with production cloud SDKs.) Tj
+ET
+
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Length 2665 >>
+stream
+BT
+/F1 10 Tf
+12 TL
+1 0 0 1 72 720 Tm
+() Tj
+T*
+(Non-functional requirements shaped the implementation:) Tj
+T*
+() Tj
+T*
+(- **Demo-ready within minutes** - `docker compose up` must bootstrap all dependencies) Tj
+T*
+(without external credentials.) Tj
+T*
+(- **Secure defaults** - Pre-generated Fernet keys, RBAC roles, and SSE-KMS configuration) Tj
+T*
+(allow immediate demonstrations without manual key provisioning.) Tj
+T*
+(- **Synthetic load generation** - Optional background simulator exercises telemetry,) Tj
+T*
+(predictive models, and alerting logic for hackathon judges.) Tj
+T*
+() Tj
+T*
+(END-TO-END ARCHITECTURE) Tj
+T*
+() Tj
+T*
+() Tj
+T*
+(High-Level Data Flow) Tj
+T*
+() Tj
+T*
+(1. **Ingress** - Users interact through the FastAPI control plane \(`app/api/server.py`\) or) Tj
+T*
+(via the Streamlit dashboard \(`app/ui/dashboard.py`\).) Tj
+T*
+(2. **Encryption & Authorization** - The security manager \(`app/security/policies.py`\)) Tj
+T*
+(validates caller roles and encrypts payloads destined for storage providers.) Tj
+T*
+(3. **Replication** - The orchestrator mover \(`app/orchestrator/mover.py`\) streams) Tj
+T*
+(ciphertext between providers using the storage client abstractions.) Tj
+T*
+(4. **Metadata Persistence** - MongoDB stores file inventories, access events, and) Tj
+T*
+(synchronization metadata. Collections are lazily created during API startup.) Tj
+T*
+(5. **Telemetry** - Access events and streaming anomalies publish into Redpanda. The) Tj
+T*
+(streaming consumer module can push high-temperature alerts back to the API.) Tj
+T*
+(6. **Visualization** - Streamlit polls `/health`, `/files`, `/consistency/status`, and) Tj
+T*
+(streaming metrics to render dashboards in real time.) Tj
+T*
+() Tj
+T*
+(Component Inventory) Tj
+T*
+() Tj
+T*
+(Layer | Module | Responsibilities) Tj
+T*
+(----- | ------ | ----------------) Tj
+T*
+(API | `app/api/server.py` | REST endpoints, Kafka producers, Mongo orchestration,) Tj
+T*
+(simulation threads) Tj
+T*
+(Orchestrator | `app/orchestrator/*` | Migration, predictive analytics, rules engine,) Tj
+T*
+(consistency management) Tj
+T*
+(Security | `app/security/policies.py` | Fernet key management, RBAC enforcement, policy) Tj
+T*
+(reporting) Tj
+T*
+(Storage Clients | `app/storage_clients/*.py` | Thin wrappers around MinIO/S3, Azurite, and) Tj
+T*
+(FakeGCS REST APIs) Tj
+T*
+(Streaming | `app/streaming/*` | Kafka producers/consumers for IoT-style telemetry) Tj
+T*
+(UI | `app/ui/dashboard.py`, `ui/stream_dashboard.py` | Streamlit dashboards for operators) Tj
+T*
+(Infrastructure | `infra/docker-compose.yml`, `infra/stream-compose.yml` | Containerized) Tj
+T*
+(topology for demos) Tj
+T*
+() Tj
+T*
+(CONTROL PLANE API \(FASTAPI\)) Tj
+ET
+
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /Contents 8 0 R >>
+endobj
+10 0 obj
+<< /Length 2443 >>
+stream
+BT
+/F1 10 Tf
+12 TL
+1 0 0 1 72 720 Tm
+() Tj
+T*
+() Tj
+T*
+(Startup Lifecycle) Tj
+T*
+() Tj
+T*
+(During `@app.on_event\("startup"\)`, the server:) Tj
+T*
+() Tj
+T*
+(1. Connects to MongoDB and initializes collections \(`files`, `access_events`,) Tj
+T*
+(`sync_status`\).) Tj
+T*
+(2. Ensures Kafka topics exist via `orchestrator.stream_consumer.ensure_topic` and builds a) Tj
+T*
+(`KafkaProducer` instance.) Tj
+T*
+(3. Seeds the predictive model \(`TierPredictor`\) with bootstrap training data or centroid) Tj
+T*
+(defaults.) Tj
+T*
+(4. Parses replica endpoint overrides and instantiates the `ConsistencyManager` for drift) Tj
+T*
+(detection.) Tj
+T*
+(5. Launches an optional synthetic load thread when `ENABLE_SYNTHETIC_LOAD` is enabled,) Tj
+T*
+(generating access events and periodic migrations.) Tj
+T*
+() Tj
+T*
+(Shutdown handlers flush Kafka producers, close Mongo connections, and stop the simulator) Tj
+T*
+(thread gracefully.) Tj
+T*
+() Tj
+T*
+(REST Endpoints) Tj
+T*
+() Tj
+T*
+(The API surface enables full lifecycle control:) Tj
+T*
+() Tj
+T*
+(Endpoint | Method | Purpose) Tj
+T*
+(-------- | ------ | -------) Tj
+T*
+(`/health` | GET | Aggregated status including uptime, Mongo/Kafka connectivity, simulator) Tj
+T*
+(counters, and active alerts.) Tj
+T*
+(`/files` | GET | Returns known files with storage location, size, confidence scores, and) Tj
+T*
+(policy metadata.) Tj
+T*
+(`/policy/{file_id}` | GET | Introspects the encryption/RBAC policy applied to the file's) Tj
+T*
+(current location.) Tj
+T*
+(`/streaming/metrics` | GET | Reports producer/consumer health, event throughput, and last) Tj
+T*
+(anomaly timestamps.) Tj
+T*
+(`/predictive/train` | POST | Accepts labeled records or auto-label requests to refine the) Tj
+T*
+(tiering model \(supports hist-gradient boosting or centroid fallback\).) Tj
+T*
+(`/ingest_event` | POST | Records a raw access event from external systems and publishes to) Tj
+T*
+(Kafka; updates rolling statistics.) Tj
+T*
+(`/move` | POST | Securely migrates an object between providers, enforcing RBAC and) Tj
+T*
+(encryption per source/destination.) Tj
+T*
+(`/seed` | POST | Ensures buckets/containers exist and uploads demo seed files from) Tj
+T*
+(`data/seeds/`.) Tj
+T*
+(`/simulate/burst` | POST | Triggers a bounded simulation burst with configurable pace,) Tj
+T*
+(file sampling, and Kafka streaming.) Tj
+T*
+(`/storage_test` | POST | Performs cross-provider read/write checks to validate credentials) Tj
+T*
+(and encryption plumbing.) Tj
+ET
+
+endstream
+endobj
+11 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /Contents 10 0 R >>
+endobj
+12 0 obj
+<< /Length 2287 >>
+stream
+BT
+/F1 10 Tf
+12 TL
+1 0 0 1 72 720 Tm
+(`/consistency/status` | GET | Surfaces replica parity metrics, conflict counters, and last) Tj
+T*
+(repair timestamps.) Tj
+T*
+(`/consistency/resync` | POST | Initiates targeted resynchronization against configured) Tj
+T*
+(replica endpoints.) Tj
+T*
+() Tj
+T*
+(MongoDB Schemas & Collections) Tj
+T*
+() Tj
+T*
+(MongoDB acts as the metadata backbone:) Tj
+T*
+() Tj
+T*
+(- **`files`** - Documents describing each tracked object: size \(KB\), latest tier,) Tj
+T*
+(confidence, costs, policy snapshot, and last move timestamps.) Tj
+T*
+(- **`access_events`** - Raw event stream for analytics, including latency metrics,) Tj
+T*
+(temperature readings, and flags for high-temperature or network anomalies.) Tj
+T*
+(- **`sync_status`** - Replica verification results, retry counters, conflicts detected,) Tj
+T*
+(and external endpoint health.) Tj
+T*
+() Tj
+T*
+(Indexes are created dynamically to optimize queries by file ID and timestamps. The) Tj
+T*
+(`Collation` ensures case-insensitive matching where required.) Tj
+T*
+() Tj
+T*
+(Kafka Telemetry Pipeline) Tj
+T*
+() Tj
+T*
+(`KafkaProducer` instances target the `access-events` topic \(default\). Each event includes:) Tj
+T*
+() Tj
+T*
+(- File identifier and event type \(read/write\).) Tj
+T*
+(- Latency, size, and client metadata for predictive features.) Tj
+T*
+(- Derived fields such as estimated egress cost and alert flags.) Tj
+T*
+() Tj
+T*
+(The orchestrator consumer \(`orchestrator.stream_consumer`\) subscribes to the same topic to) Tj
+T*
+(maintain moving averages, update predictive feature windows, and push anomalies back into) Tj
+T*
+(the API.) Tj
+T*
+() Tj
+T*
+(ORCHESTRATION SERVICES) Tj
+T*
+() Tj
+T*
+() Tj
+T*
+(Mover) Tj
+T*
+() Tj
+T*
+(`app/orchestrator/mover.py` encapsulates secure transfers. Key behaviors:) Tj
+T*
+() Tj
+T*
+(- Lazily ensures required buckets/containers exist when seeding.) Tj
+T*
+(- Retrieves ciphertext from the source provider, decrypts using source policy, and re-) Tj
+T*
+(encrypts with the destination key.) Tj
+T*
+(- Deletes the source object post-transfer to simulate a true "move" while guaranteeing) Tj
+T*
+(destination integrity via checksums.) Tj
+T*
+(- Supports principal role overrides so that human operators can provide explicit RBAC) Tj
+T*
+(context when invoking `/move`.) Tj
+T*
+() Tj
+ET
+
+endstream
+endobj
+13 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /Contents 12 0 R >>
+endobj
+14 0 obj
+<< /Length 2392 >>
+stream
+BT
+/F1 10 Tf
+12 TL
+1 0 0 1 72 720 Tm
+(Predictive Tiering) Tj
+T*
+() Tj
+T*
+(`app/orchestrator/predictive.py` implements the `TierPredictor` class:) Tj
+T*
+() Tj
+T*
+(- Prefers `HistGradientBoostingClassifier` when scikit-learn is available; otherwise falls) Tj
+T*
+(back to centroid-based nearest neighbor logic.) Tj
+T*
+(- Normalizes feature vectors using defaults defined in `FEATURE_DEFAULTS` within the API) Tj
+T*
+(server.) Tj
+T*
+(- Emits confidence scores and rationale metadata so policies can override when confidence) Tj
+T*
+(is low or costs exceed thresholds.) Tj
+T*
+(- Offers auto-labeling heuristics that bucket files into hot/warm/cold tiers based on) Tj
+T*
+(recent activity and SLA pressures.) Tj
+T*
+() Tj
+T*
+(Rules Engine) Tj
+T*
+() Tj
+T*
+(`app/orchestrator/rules.py` codifies deterministic overrides:) Tj
+T*
+() Tj
+T*
+(- Forces **hot tier** retention when latency SLOs are breached or high-temperature alerts) Tj
+T*
+(persist.) Tj
+T*
+(- Promotes to **warm tier** when access frequency drops but confidence remains high.) Tj
+T*
+(- Falls back to **cold tier** when access is sporadic and storage cost pressures dominate.) Tj
+T*
+(- Integrates with alert thresholds defined in environment variables, ensuring that) Tj
+T*
+(operations teams can tune behavior without code changes.) Tj
+T*
+() Tj
+T*
+(Consistency Verification) Tj
+T*
+() Tj
+T*
+(`app/orchestrator/consistency.py` provides the `ConsistencyManager`:) Tj
+T*
+() Tj
+T*
+(- Periodically polls configured replica endpoints \(including optional external REST) Tj
+T*
+(mirrors\) to compare checksums.) Tj
+T*
+(- Applies exponential backoff via `with_retry` helper for flaky networks.) Tj
+T*
+(- Flags conflicts in MongoDB and surfaces them through `/consistency/status` so Streamlit) Tj
+T*
+(can visualize drift.) Tj
+T*
+(- Supports manual resynchronization workflows triggered by `/consistency/resync`.) Tj
+T*
+() Tj
+T*
+(Streaming Consumers) Tj
+T*
+() Tj
+T*
+(`app/orchestrator/stream_consumer.py` and `app/streaming/consumer` coordinate Kafka) Tj
+T*
+(subscriptions:) Tj
+T*
+() Tj
+T*
+(- Maintain connection health, last processed offsets, and consumer lag metrics.) Tj
+T*
+(- Transform raw events into aggregated statistics for predictive features \(EMA, growth) Tj
+T*
+(rates, percentile latency calculations\).) Tj
+T*
+(- Bubble anomalies \(e.g., sustained high temperature\) back to the API for alerting and) Tj
+T*
+(policy overrides.) Tj
+T*
+() Tj
+ET
+
+endstream
+endobj
+15 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /Contents 14 0 R >>
+endobj
+16 0 obj
+<< /Length 2179 >>
+stream
+BT
+/F1 10 Tf
+12 TL
+1 0 0 1 72 720 Tm
+(SECURITY & COMPLIANCE) Tj
+T*
+() Tj
+T*
+() Tj
+T*
+(Encryption Domains) Tj
+T*
+() Tj
+T*
+(Three logical locations-`s3`, `azure`, and `gcs`-map to their respective emulators. Each) Tj
+T*
+(domain receives a dedicated Fernet key. Payloads remain encrypted even during transient) Tj
+T*
+(storage in orchestrator memory, minimizing plaintext exposure.) Tj
+T*
+() Tj
+T*
+(Role-Based Access Control) Tj
+T*
+() Tj
+T*
+(`AdaptiveSecurityManager.authorize` ensures that the caller possesses at least one allowed) Tj
+T*
+(role before encryption/decryption. Defaults include:) Tj
+T*
+() Tj
+T*
+(- S3: `analytics`, `engineering`, `system`) Tj
+T*
+(- Azure: `operations`, `engineering`, `system`) Tj
+T*
+(- GCS: `compliance`, `analytics`, `system`) Tj
+T*
+() Tj
+T*
+(Operators can override roles via environment variables \(`S3_ALLOWED_ROLES`, etc.\) without) Tj
+T*
+(redeploying the API.) Tj
+T*
+() Tj
+T*
+(Key Management & Rotation) Tj
+T*
+() Tj
+T*
+(Keys can be rotated through environment variables \(`S3_ENCRYPTION_KEY`, etc.\). When set,) Tj
+T*
+(the manager records that the source was `env:VARIABLE`, aiding audit trails. Invalid key) Tj
+T*
+(lengths trigger immediate startup failures, preventing silent misconfiguration.) Tj
+T*
+() Tj
+T*
+(Auditability) Tj
+T*
+() Tj
+T*
+(`describe_policy` generates structured snapshots covering algorithm, key ID, key source,) Tj
+T*
+(and allowed roles. These snapshots are persisted alongside file metadata so auditors can) Tj
+T*
+(verify encryption lineage per object.) Tj
+T*
+() Tj
+T*
+(STORAGE CLIENT ABSTRACTIONS) Tj
+T*
+() Tj
+T*
+() Tj
+T*
+(- **`storage_clients/s3_client.py`** - Wraps `boto3`-compatible MinIO operations \(bucket) Tj
+T*
+(ensure, put/get/delete\) with retry semantics and SSE headers.) Tj
+T*
+(- **`storage_clients/azure_client.py`** - Uses Azure Blob SDK equivalents to manage) Tj
+T*
+(containers and block blobs against Azurite.) Tj
+T*
+(- **`storage_clients/gcs_client.py`** - Talks to FakeGCS via HTTP, normalizing responses) Tj
+T*
+(to match other clients.) Tj
+T*
+() Tj
+T*
+(These thin adapters isolate provider-specific credentials and APIs, enabling future swap-) Tj
+T*
+(outs with managed cloud services.) Tj
+T*
+() Tj
+ET
+
+endstream
+endobj
+17 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /Contents 16 0 R >>
+endobj
+18 0 obj
+<< /Length 2280 >>
+stream
+BT
+/F1 10 Tf
+12 TL
+1 0 0 1 72 720 Tm
+(OBSERVABILITY & ALERTING) Tj
+T*
+() Tj
+T*
+() Tj
+T*
+(- Alert thresholds for cost \(`ALERT_COST_THRESHOLD`\), latency \(`ALERT_LATENCY_P95_MS`\),) Tj
+T*
+(stream throughput, and predictive confidence are environment-configurable.) Tj
+T*
+(- `/health` consolidates metrics such as Mongo connection status, Kafka reachability,) Tj
+T*
+(simulator counters, and outstanding alerts.) Tj
+T*
+(- Consistency metrics track last verification time, conflict counts, and retry statistics) Tj
+T*
+(for each replica endpoint.) Tj
+T*
+(- Streamlit surfaces sparkline charts, tabular inventories, and anomaly banners to make) Tj
+T*
+(drift and SLA breaches obvious during demos.) Tj
+T*
+() Tj
+T*
+(STREAMLIT MISSION CONTROL) Tj
+T*
+() Tj
+T*
+() Tj
+T*
+(`app/ui/dashboard.py` consumes the API to render:) Tj
+T*
+() Tj
+T*
+(- File inventory table with tier, size, replica status, encryption policy summary, and) Tj
+T*
+(estimated monthly cost.) Tj
+T*
+(- Alert panel summarizing latency, cost, or anomaly breaches.) Tj
+T*
+(- Real-time stream metrics \(events per minute, connected devices, high-temperature) Tj
+T*
+(alerts\).) Tj
+T*
+(- Manual controls to trigger seeding, migrations, and simulation bursts for live) Tj
+T*
+(demonstrations.) Tj
+T*
+() Tj
+T*
+(An optional `ui/stream_dashboard.py` focuses on the streaming sandbox, plotting IoT sensor) Tj
+T*
+(data and anomaly detectors when the secondary stream API is enabled via `infra/stream-) Tj
+T*
+(compose.yml`.) Tj
+T*
+() Tj
+T*
+(INFRASTRUCTURE AS CODE) Tj
+T*
+() Tj
+T*
+() Tj
+T*
+(Local Compose Topology) Tj
+T*
+() Tj
+T*
+(`infra/docker-compose.yml` orchestrates the full stack:) Tj
+T*
+() Tj
+T*
+(1. **Redpanda** \(`redpandadata/redpanda`\) - Kafka-compatible broker without ZooKeeper.) Tj
+T*
+(2. **MinIO** - Provides S3 API with SSE-KMS enabled via `netapp-key` alias.) Tj
+T*
+(3. **Azurite** - Emulates Azure Blob Storage.) Tj
+T*
+(4. **FakeGCS** - Simulates Google Cloud Storage \(HTTP on port 4443\).) Tj
+T*
+(5. **MongoDB** - Metadata store.) Tj
+T*
+(6. **API** - Builds from `app/Dockerfile`, mounts source volume for hot reload.) Tj
+T*
+(7. **UI** - Lightweight Python container running Streamlit.) Tj
+T*
+() Tj
+T*
+(Volumes persist emulator data between restarts. Ports are published for local testing and) Tj
+T*
+(UI access.) Tj
+ET
+
+endstream
+endobj
+19 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /Contents 18 0 R >>
+endobj
+20 0 obj
+<< /Length 1779 >>
+stream
+BT
+/F1 10 Tf
+12 TL
+1 0 0 1 72 720 Tm
+() Tj
+T*
+(Environment Configuration) Tj
+T*
+() Tj
+T*
+(Key environment variables \(see [Appendix]\(#reference-environment-variables\)\) control) Tj
+T*
+(endpoints, credentials, and alert thresholds. Compose injects sane defaults so newcomers) Tj
+T*
+(can start demos without extra setup.) Tj
+T*
+() Tj
+T*
+(Extending to Cloud Providers) Tj
+T*
+() Tj
+T*
+(To graduate from emulators to managed services:) Tj
+T*
+() Tj
+T*
+(- Swap MinIO credentials for AWS IAM keys and update `S3_ENDPOINT` to an AWS region) Tj
+T*
+(endpoint.) Tj
+T*
+(- Configure Azure storage connection strings and enable HTTPS.) Tj
+T*
+(- Point GCS client to `https://storage.googleapis.com` with OAuth credentials.) Tj
+T*
+(- Harden KMS integration by replacing MinIO static key with external KMS URIs \(AWS KMS,) Tj
+T*
+(Azure Key Vault, Google Cloud KMS\).) Tj
+T*
+(- Add infrastructure automation \(Terraform or Pulumi\) to provision buckets and IAM roles) Tj
+T*
+(consistently.) Tj
+T*
+() Tj
+T*
+(RUNBOOKS & OPERATIONAL PLAYBOOKS) Tj
+T*
+() Tj
+T*
+() Tj
+T*
+(1. **Bootstrap Demo**) Tj
+T*
+(CODE BLOCK:) Tj
+T*
+() Tj
+T*
+(       cd infra) Tj
+T*
+(       docker compose up --build) Tj
+T*
+() Tj
+T*
+(   Wait for API \(port 8001\) and Streamlit \(port 8501\) to report healthy.) Tj
+T*
+() Tj
+T*
+(2. **Seed Initial Data**) Tj
+T*
+(CODE BLOCK:) Tj
+T*
+() Tj
+T*
+(       curl -X POST http://localhost:8001/seed) Tj
+T*
+() Tj
+T*
+(   Seeds `data/seeds/*.txt` into MinIO with encryption.) Tj
+T*
+() Tj
+T*
+(3. **Trigger Predictive Move**) Tj
+T*
+(CODE BLOCK:) Tj
+T*
+() Tj
+T*
+(       curl -X POST http://localhost:8001/move \\) Tj
+T*
+(            -H 'Content-Type: application/json' \\) Tj
+T*
+(            -d '{"file_id": "file_001.txt", "target": "gcs", "principal_roles":) Tj
+T*
+(["analytics"]}') Tj
+T*
+() Tj
+ET
+
+endstream
+endobj
+21 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /Contents 20 0 R >>
+endobj
+22 0 obj
+<< /Length 1926 >>
+stream
+BT
+/F1 10 Tf
+12 TL
+1 0 0 1 72 720 Tm
+() Tj
+T*
+(4. **Inspect Consistency**) Tj
+T*
+(CODE BLOCK:) Tj
+T*
+() Tj
+T*
+(       curl http://localhost:8001/consistency/status) Tj
+T*
+() Tj
+T*
+() Tj
+T*
+(5. **Kick Off Simulation Burst**) Tj
+T*
+(CODE BLOCK:) Tj
+T*
+() Tj
+T*
+(       curl -X POST http://localhost:8001/simulate/burst \\) Tj
+T*
+(            -H 'Content-Type: application/json' \\) Tj
+T*
+(            -d '{"events": 250, "stream_events": true, "include_moves": true, "pace_ms":) Tj
+T*
+(25}') Tj
+T*
+() Tj
+T*
+() Tj
+T*
+(TESTING STRATEGY) Tj
+T*
+() Tj
+T*
+() Tj
+T*
+(- Unit-level logic \(encryption, RBAC, predictive scoring\) can be exercised via pytest when) Tj
+T*
+(run locally.) Tj
+T*
+(- Integration testing leverages the Compose stack: seed data, move objects, and validate) Tj
+T*
+(metrics via REST endpoints.) Tj
+T*
+(- Observability smoke tests query `/health`, `/streaming/metrics`, and) Tj
+T*
+(`/consistency/status` to ensure instrumentation is live.) Tj
+T*
+(- Future iterations should add CI workflows that spin up minimal services \(MinIO + Mongo\)) Tj
+T*
+(to validate migrations in headless mode.) Tj
+T*
+() Tj
+T*
+(ROADMAP & FUTURE ENHANCEMENTS) Tj
+T*
+() Tj
+T*
+() Tj
+T*
+(- Integrate native AWS/Azure/GCP SDKs with credential management and IAM policies.) Tj
+T*
+(- Add Kubernetes deployment manifests \(Helm or Kustomize\) for scalable clusters.) Tj
+T*
+(- Implement reinforcement learning feedback loops for adaptive tiering.) Tj
+T*
+(- Expand anomaly detection with multivariate forecasting models.) Tj
+T*
+(- Introduce cost governance dashboards correlating with real billing APIs.) Tj
+T*
+() Tj
+T*
+(APPENDIX) Tj
+T*
+() Tj
+T*
+() Tj
+T*
+(Reference Environment Variables) Tj
+T*
+() Tj
+T*
+(Variable | Default | Description) Tj
+T*
+(-------- | ------- | -----------) Tj
+T*
+(`KAFKA_BOOTSTRAP` | `redpanda:9092` | Kafka bootstrap server for producers/consumers) Tj
+T*
+(`TOPIC_ACCESS` | `access-events` | Topic for telemetry events) Tj
+ET
+
+endstream
+endobj
+23 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /Contents 22 0 R >>
+endobj
+24 0 obj
+<< /Length 2532 >>
+stream
+BT
+/F1 10 Tf
+12 TL
+1 0 0 1 72 720 Tm
+(`MONGO_URL` | `mongodb://mongo:27017` | Metadata persistence) Tj
+T*
+(`S3_ENDPOINT` | `http://minio:9000` | MinIO API endpoint) Tj
+T*
+(`S3_ACCESS_KEY` | `minio` | MinIO credential) Tj
+T*
+(`S3_SECRET_KEY` | `minio12345` | MinIO credential) Tj
+T*
+(`S3_BUCKET` | `netapp-bucket` | Primary S3 bucket) Tj
+T*
+(`AZURITE_BLOB_URL` | `http://azurite:10000/devstoreaccount1` | Azurite endpoint) Tj
+T*
+(`GCS_ENDPOINT` | `http://fakegcs:4443` | FakeGCS endpoint) Tj
+T*
+(`GCS_BUCKET` | `netapp-gcs` | Target GCS bucket) Tj
+T*
+(`ENABLE_SYNTHETIC_LOAD` | `1` | Toggle background simulator) Tj
+T*
+(`ALERT_COST_THRESHOLD` | `0.08` | Storage cost alert threshold \(USD/GB\)) Tj
+T*
+(`ALERT_LATENCY_P95_MS` | `180` | Latency SLO \(milliseconds\)) Tj
+T*
+(`ALERT_STREAM_EVENTS_PER_MIN` | `15` | Streaming throughput minimum) Tj
+T*
+(`ALERT_CONFIDENCE_THRESHOLD` | `0.9` | Predictive confidence floor) Tj
+T*
+(`S3_ENCRYPTION_KEY` | demo Fernet key | Override for S3 encryption) Tj
+T*
+(`AZURE_ENCRYPTION_KEY` | demo Fernet key | Override for Azure encryption) Tj
+T*
+(`GCS_ENCRYPTION_KEY` | demo Fernet key | Override for GCS encryption) Tj
+T*
+(`S3_ALLOWED_ROLES` | `analytics,engineering,system` | RBAC overrides) Tj
+T*
+(`AZURE_ALLOWED_ROLES` | `operations,engineering,system` | RBAC overrides) Tj
+T*
+(`GCS_ALLOWED_ROLES` | `compliance,analytics,system` | RBAC overrides) Tj
+T*
+() Tj
+T*
+(Sample API Sequences) Tj
+T*
+() Tj
+T*
+(1. **Onboard New Dataset**) Tj
+T*
+(1. Call `/seed` to ensure storage primitives exist and load baseline files.) Tj
+T*
+(2. Submit historical access records to `/predictive/train` to prime the tiering model.) Tj
+T*
+(3. Stream real-time events via `/ingest_event`; monitor Streamlit for anomalies.) Tj
+T*
+(4. Use `/move` to promote/demote tiers based on combined ML + rules recommendations.) Tj
+T*
+(5. Periodically hit `/consistency/status` and `/consistency/resync` to maintain replica) Tj
+T*
+(health.) Tj
+T*
+() Tj
+T*
+(2. **Respond to Latency Incident**) Tj
+T*
+(1. `/health` reveals rising latency alerts and declining predictive confidence.) Tj
+T*
+(2. `/files` identifies impacted objects with warm/cold tiers.) Tj
+T*
+(3. `/move` promotes critical files to `s3` hot storage using emergency operator roles.) Tj
+T*
+(4. `/simulate/burst` is disabled \(set `ENABLE_SYNTHETIC_LOAD=0`\) to reduce background) Tj
+T*
+(noise.) Tj
+T*
+(5. `/streaming/metrics` confirms throughput recovery; update postmortem with Mongo audit) Tj
+T*
+(records.) Tj
+T*
+() Tj
+T*
+(---) Tj
+T*
+() Tj
+T*
+(**End of Document**) Tj
+ET
+
+endstream
+endobj
+25 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /Contents 24 0 R >>
+endobj
+xref
+0 26
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000208 00000 n 
+0000000278 00000 n 
+0000002723 00000 n 
+0000002825 00000 n 
+0000005814 00000 n 
+0000005916 00000 n 
+0000008633 00000 n 
+0000008735 00000 n 
+0000011231 00000 n 
+0000011335 00000 n 
+0000013675 00000 n 
+0000013779 00000 n 
+0000016224 00000 n 
+0000016328 00000 n 
+0000018560 00000 n 
+0000018664 00000 n 
+0000020997 00000 n 
+0000021101 00000 n 
+0000022933 00000 n 
+0000023037 00000 n 
+0000025016 00000 n 
+0000025120 00000 n 
+0000027705 00000 n 
+trailer
+<< /Size 26 /Root 1 0 R >>
+startxref
+27809
+%%EOF
