@@ -19,15 +19,19 @@ services:
 
   minio:
     image: minio/minio:latest
-    command: server /data --console-address ":9001"
+    container_name: infra-minio-1
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: minio12345
+      # KMS with a static secret key. Replace BASE64_32B_KEY below with a real base64 string.
+      MINIO_KMS_SECRET_KEY: "netapp-key:bLy96HfrgDEACipGpy2c0+TNnyIlO2THsICABvpYofY="
+      MINIO_KMS_AUTO_ENCRYPTION: "on"
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
     volumes:
       - minio_data:/data
-    ports:
-      - "9002:9000"
-      - "9003:9001"
 
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite
@@ -82,7 +86,7 @@ services:
       - azurite
       - fakegcs
     ports:
-      - "8000:8000"
+      - "8001:8000"
 
   ui:
     image: python:3.11-slim
